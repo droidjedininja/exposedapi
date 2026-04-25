@@ -1,0 +1,2 @@
+# exposedapi
+API misconfiguration scanner
