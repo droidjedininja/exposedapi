@@ -1,0 +1,30 @@
+name: ExposedAPI demo checks
+
+on:
+  push:
+    paths:
+      - "demo/**"
+      - ".github/workflows/demo-ci.yml"
+  pull_request:
+    paths:
+      - "demo/**"
+      - ".github/workflows/demo-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: node --check app.js
+      - name: Run smoke tests
+        run: node tests/smoke.cjs

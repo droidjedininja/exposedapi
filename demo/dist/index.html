@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07100f">
+  <meta name="description" content="Interactive ExposedAPI demo for authorized bug bounty scan triage and reporting.">
+  <title>ExposedAPI — Authorized Scan Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Product navigation">
+      <a class="brand" href="#scan" data-route="scan" aria-label="ExposedAPI home">
+        <svg class="brand-mark" viewBox="0 0 44 44" role="img" aria-label="ExposedAPI shield mark">
+          <path d="M22 3 38 9v12c0 9.4-6.7 16.9-16 20C12.7 37.9 6 30.4 6 21V9l16-6Z" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M14 15h5l3-4 3 4h5M14 29h5l3 4 3-4h5M13 22h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="22" cy="22" r="4" fill="currentColor"/>
+          <path d="M22 24v4" stroke="#07100f" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span>EXPOSED<span>API</span></span>
+      </a>
+
+      <nav class="nav-stack">
+        <button class="nav-item active" data-view-target="scan" type="button">
+          <span class="nav-icon">⌁</span><span>Scan overview</span>
+        </button>
+        <button class="nav-item" data-view-target="findings" type="button">
+          <span class="nav-icon">◇</span><span>Findings</span><span class="nav-count" id="navFindingCount">—</span>
+        </button>
+        <button class="nav-item" data-view-target="report" type="button">
+          <span class="nav-icon">▤</span><span>Report builder</span><span class="nav-count" id="navReportCount">0</span>
+        </button>
+        <button class="nav-item" data-view-target="academy" type="button">
+          <span class="nav-icon">◎</span><span>Operator Academy</span><span class="nav-count" id="navAcademyCount">0/5</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="scope-status">
+          <span class="status-dot"></span>
+          <div><strong>Authorized demo</strong><small>Synthetic .test target</small></div>
+        </div>
+        <p>All requests and evidence are simulated for product demonstration.</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" type="button" aria-label="Open navigation">☰</button>
+        <div class="breadcrumb"><span>Workspace</span><b>/</b><strong>Demo program</strong></div>
+        <div class="topbar-actions">
+          <span class="authorized-pill"><i></i> Authorization verified</span>
+          <button class="avatar" type="button" aria-label="Cyph3r profile">CY</button>
+        </div>
+      </header>
+
+      <section class="view active" id="scanView" data-view="scan" aria-labelledby="scanTitle">
+        <div class="view-header scan-hero">
+          <div>
+            <span class="eyebrow">AUTHORIZED ASSESSMENT • SAMPLE WORKSPACE</span>
+            <h1 id="scanTitle">Turn scan noise into <em>defensible findings.</em></h1>
+            <p>Watch ExposedAPI discover, verify, and rank API issues before packaging the strongest evidence for HackerOne.</p>
+          </div>
+          <button class="primary-button" id="runScanButton" type="button">
+            <span class="button-icon">▶</span><span>Run sample scan</span>
+          </button>
+        </div>
+
+        <div class="scan-grid">
+          <article class="panel scope-panel">
+            <div class="panel-heading">
+              <div><span class="step-kicker">01 / SCOPE</span><h2>Authorized target</h2></div>
+              <span class="tag neutral">Demo data</span>
+            </div>
+            <label class="field-label" for="targetInput">Base URL</label>
+            <div class="target-field">
+              <span>https://</span>
+              <input id="targetInput" value="api.demo-marketplace.test" readonly aria-readonly="true">
+              <span class="verified-mark" aria-label="Verified">✓</span>
+            </div>
+            <div class="scope-meta">
+              <div><span>Scope</span><strong>API + GraphQL</strong></div>
+              <div><span>Profile</span><strong>Authenticated</strong></div>
+              <div><span>Rate</span><strong>4 req/sec</strong></div>
+            </div>
+            <div class="auth-callout"><span>✓</span><p><strong>Safe demo mode</strong> — requests are replayed from a synthetic fixture. No external system is contacted.</p></div>
+          </article>
+
+          <article class="panel pipeline-panel">
+            <div class="panel-heading">
+              <div><span class="step-kicker">02 / PIPELINE</span><h2>Verification workflow</h2></div>
+              <span class="scan-state" id="scanState">Ready</span>
+            </div>
+            <div class="pipeline" id="pipeline">
+              <div class="pipeline-step" data-stage="discover">
+                <div class="stage-marker"><span>1</span></div>
+                <div><strong>Discover</strong><small>Routes &amp; schemas</small></div>
+                <b class="stage-result" id="discoverResult">—</b>
+              </div>
+              <div class="pipeline-step" data-stage="analyze">
+                <div class="stage-marker"><span>2</span></div>
+                <div><strong>Analyze</strong><small>Auth boundaries</small></div>
+                <b class="stage-result" id="analyzeResult">—</b>
+              </div>
+              <div class="pipeline-step" data-stage="verify">
+                <div class="stage-marker"><span>3</span></div>
+                <div><strong>Verify</strong><small>Replay evidence</small></div>
+                <b class="stage-result" id="verifyResult">—</b>
+              </div>
+              <div class="pipeline-step" data-stage="prioritize">
+                <div class="stage-marker"><span>4</span></div>
+                <div><strong>Prioritize</strong><small>Impact × confidence</small></div>
+                <b class="stage-result" id="prioritizeResult">—</b>
+              </div>
+            </div>
+            <div class="progress-track" aria-hidden="true"><span id="scanProgress"></span></div>
+            <div class="pipeline-log" id="pipelineLog" aria-live="polite">
+              <span class="log-time">00:00</span><span>Ready to replay an authorized sample scan.</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="results-block locked" id="resultsBlock">
+          <div class="results-title-row">
+            <div><span class="step-kicker">03 / SIGNAL</span><h2>Prioritized result</h2></div>
+            <button class="text-button" id="reviewTopFinding" type="button">Review highest signal <span>→</span></button>
+          </div>
+          <div class="metric-grid">
+            <article class="metric-card emphasis"><span>Verified findings</span><strong id="verifiedMetric">0</strong><small>from 27 raw signals</small></article>
+            <article class="metric-card"><span>Highest severity</span><strong class="severity-text">HIGH</strong><small>BOLA / IDOR</small></article>
+            <article class="metric-card"><span>Top confidence</span><strong>96%</strong><small>3-request replay</small></article>
+            <article class="metric-card"><span>Noise reduced</span><strong>85%</strong><small>23 signals suppressed</small></article>
+          </div>
+          <div class="signal-strip">
+            <div class="signal-copy"><span class="severity-dot high"></span><div><strong>Cross-account order access</strong><small>GET /api/v1/orders/{order_id}</small></div></div>
+            <div class="signal-proof"><span>Evidence</span><strong>Account A → Account B data</strong></div>
+            <div class="confidence"><span>Confidence</span><div><i style="--score:96%"></i></div><strong>96%</strong></div>
+            <button class="secondary-button open-finding" data-finding-id="f-001" type="button">Inspect</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="findingsView" data-view="findings" aria-labelledby="findingsTitle" hidden>
+        <div class="view-header compact-header">
+          <div><span class="eyebrow">VERIFIED SIGNAL QUEUE</span><h1 id="findingsTitle">Findings worth a human’s time.</h1><p>Ranked by exploitability, evidence strength, and program impact.</p></div>
+          <button class="primary-button small" id="findingsRunScan" type="button">Replay scan</button>
+        </div>
+        <div class="empty-state" id="findingsEmpty">
+          <div class="empty-glyph">⌁</div><h2>No scan data yet</h2><p>Run the sample scan to populate a realistic prioritized queue.</p><button class="primary-button" id="emptyRunScan" type="button">Run sample scan</button>
+        </div>
+        <div class="findings-workspace" id="findingsWorkspace" hidden>
+          <div class="filter-bar">
+            <div class="severity-filters" id="severityFilters" aria-label="Filter by severity">
+              <button class="filter-chip active" data-severity="all" type="button">All <span>4</span></button>
+              <button class="filter-chip" data-severity="high" type="button">High <span>1</span></button>
+              <button class="filter-chip" data-severity="medium" type="button">Medium <span>2</span></button>
+              <button class="filter-chip" data-severity="low" type="button">Low <span>1</span></button>
+            </div>
+            <label class="confidence-filter">Min confidence <strong id="confidenceValue">0%</strong><input id="confidenceRange" type="range" min="0" max="100" value="0"></label>
+            <select id="sortFindings" aria-label="Sort findings"><option value="risk">Sort: Risk</option><option value="confidence">Sort: Confidence</option><option value="status">Sort: Status</option></select>
+          </div>
+          <div class="finding-summary-row">
+            <span id="resultCount">4 findings</span>
+            <div class="legend"><span><i class="severity-dot high"></i>High</span><span><i class="severity-dot medium"></i>Medium</span><span><i class="severity-dot low"></i>Low</span></div>
+          </div>
+          <div class="finding-list" id="findingList"></div>
+        </div>
+      </section>
+
+      <section class="view" id="reportView" data-view="report" aria-labelledby="reportTitle" hidden>
+        <div class="view-header compact-header report-header">
+          <div><span class="eyebrow">HACKERONE-READY OUTPUT</span><h1 id="reportTitle">Make the evidence easy to trust.</h1><p>Preview a concise submission generated from verified scan artifacts.</p></div>
+          <div class="report-actions"><button class="secondary-button" id="downloadReport" type="button">Download .md</button><button class="primary-button small" id="copyReport" type="button">Copy report</button></div>
+        </div>
+        <div class="empty-state" id="reportEmpty">
+          <div class="empty-glyph">▤</div><h2>No finding selected</h2><p>Run the scan and add a verified finding to the report.</p><button class="primary-button" id="reportRunScan" type="button">Run sample scan</button>
+        </div>
+        <div class="report-workspace" id="reportWorkspace" hidden>
+          <aside class="report-controls panel">
+            <span class="step-kicker">REPORT SETTINGS</span>
+            <h2>Submission package</h2>
+            <label class="field-label" for="reportFindingSelect">Primary finding</label>
+            <select id="reportFindingSelect"></select>
+            <div class="control-group">
+              <span class="field-label">Included evidence</span>
+              <label class="toggle-row"><span><strong>Raw request</strong><small>Reproducible HTTP</small></span><input type="checkbox" id="includeRequest" checked><i></i></label>
+              <label class="toggle-row"><span><strong>Response excerpt</strong><small>PII stays redacted</small></span><input type="checkbox" id="includeResponse" checked><i></i></label>
+              <label class="toggle-row"><span><strong>Remediation</strong><small>Actionable guidance</small></span><input type="checkbox" id="includeRemediation" checked><i></i></label>
+            </div>
+            <div class="readiness-card">
+              <div><span>Submission readiness</span><strong id="readinessScore">100%</strong></div>
+              <div class="readiness-track"><i id="readinessBar"></i></div>
+              <ul id="readinessList"><li class="complete">Impact demonstrated</li><li class="complete">Reproduction included</li><li class="complete">Sensitive values redacted</li></ul>
+            </div>
+            <div class="safe-note">Generated from synthetic demo evidence. Review all output before submitting a real report.</div>
+          </aside>
+          <article class="report-preview" id="reportPreview" aria-label="HackerOne report preview"></article>
+        </div>
+      </section>
+
+      <section class="view" id="academyView" data-view="academy" aria-labelledby="academyTitle" hidden>
+        <div class="view-header compact-header academy-header">
+          <div><span class="eyebrow">CYPH3R OPERATOR PATH • MISSION 01</span><h1 id="academyTitle">Learn the loop by running it.</h1><p>Complete one evidence-backed assessment from authorized scope to report export.</p></div>
+          <button class="secondary-button" id="resetMission" type="button">Reset mission</button>
+        </div>
+        <div class="academy-grid">
+          <article class="panel mission-panel">
+            <div class="mission-score">
+              <div class="score-ring" id="academyRing" style="--progress:0%"><span id="academyPercent">0%</span></div>
+              <div><span class="step-kicker">TONIGHT • 45 MINUTES</span><h2>First operator pass</h2><p id="academyStatus">Start with the trust boundary: confirm what you are allowed to test.</p></div>
+            </div>
+            <div class="mission-track"><i id="academyProgress"></i></div>
+            <div class="mission-list" id="missionList"></div>
+          </article>
+          <div class="academy-side">
+            <article class="panel doctrine-panel">
+              <span class="step-kicker">OPERATING DOCTRINE</span><h2>What ExposedAPI is for</h2>
+              <p>It reduces discovery noise and organizes proof. You remain the operator who validates authorization, business logic, and impact.</p>
+              <div class="doctrine-flow"><span>Scope</span><b>→</b><span>Discover</span><b>→</b><span>Verify</span><b>→</b><span>Report</span></div>
+            </article>
+            <article class="panel knowledge-panel">
+              <span class="step-kicker">KNOW IT COLD</span><h2>Five concepts to own</h2>
+              <details open><summary>Scope</summary><p>The exact systems, methods, accounts, and limits you are authorized to test.</p></details>
+              <details><summary>Signal</summary><p>An observation worth investigating. A signal is not a vulnerability until evidence supports it.</p></details>
+              <details><summary>Verification</summary><p>A controlled replay that changes one relevant condition and reproduces the security failure.</p></details>
+              <details><summary>Confidence</summary><p>How strongly the collected evidence supports the claimed behavior and rules out noise.</p></details>
+              <details><summary>Defensible report</summary><p>A concise claim with authorization context, reproducible steps, evidence, impact, and redaction.</p></details>
+            </article>
+          </div>
+        </div>
+        <article class="panel debrief-panel" id="debriefPanel">
+          <div><span class="step-kicker">MISSION DEBRIEF</span><h2>Explain the finding without the interface.</h2><p>If you can answer these three prompts from memory, you understand the workflow.</p></div>
+          <ol><li>What trust boundary failed?</li><li>Which request change proved it?</li><li>What evidence demonstrates real impact?</li></ol>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="finding-drawer" id="findingDrawer" aria-hidden="true" aria-labelledby="drawerTitle">
+    <div class="drawer-head"><div><span class="eyebrow">FINDING DETAIL</span><h2 id="drawerTitle">Finding</h2></div><button id="closeDrawer" type="button" aria-label="Close finding detail">×</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-foot"><button class="secondary-button" id="drawerCopyPoc" type="button">Copy PoC</button><button class="primary-button small" id="drawerAddReport" type="button">Add to report</button></div>
+  </aside>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
