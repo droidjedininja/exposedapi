@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exposedapi"
+version = "0.2.0"
+description = "Scope-enforced API security triage for authorized testing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+exposedapi = "exposedapi.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["exposedapi*"]
