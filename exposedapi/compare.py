@@ -11,7 +11,7 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 from .har import STATIC_SUFFIXES
 from .scanner import UrllibClient, validate_target
 
-BLOCKED_PATH_TERMS = ("/callback", "/logout", "/signout", "/token/redirect")
+BLOCKED_PATH_TERMS = ("/callback", "/logout", "/signout", "/token/redirect", "/smart-contracts")
 SENSITIVE_QUERY_NAMES = {"access_token", "code", "id_token", "state", "statetoken", "token"}
 
 
