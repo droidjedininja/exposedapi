@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
+from .har import import_har, write_inventory
 from .reporting import build_report, write_html, write_json
 from .scanner import load_lines, scan_targets, validate_target
 
@@ -36,7 +38,31 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_import_har_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Import and safely inventory an authorized browser HAR")
+    parser.add_argument("import-har", help=argparse.SUPPRESS)
+    parser.add_argument("--har", required=True, help="HAR file exported from the browser or Burp")
+    parser.add_argument("--scope", required=True, help="File containing authorized hostnames or wildcards")
+    parser.add_argument("--output", "-o", required=True, help="Redacted JSON inventory output")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "import-har":
+        parser = build_import_har_parser()
+        args = parser.parse_args(argv)
+        scope = load_lines(args.scope)
+        if not scope:
+            parser.error("scope file is empty")
+        try:
+            inventory = import_har(args.har, scope)
+            write_inventory(inventory, args.output)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            parser.error(str(exc))
+        count = inventory["summary"]["unique_safe_endpoints"]
+        print(f"Saved {count} redacted, in-scope GET/HEAD endpoint(s) to {args.output}")
+        return 0
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.acknowledge_authorization:
@@ -86,4 +112,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

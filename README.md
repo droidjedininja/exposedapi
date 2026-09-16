@@ -32,6 +32,19 @@ https://api.example.com/health
 https://api.example.com/v1/profile
 ```
 
+## Import browser traffic
+
+Export a HAR from your browser or Burp, keep the original file private, and build a redacted inventory:
+
+```bash
+exposedapi import-har \
+  --har ~/captures/account-a.har \
+  --scope scope.txt \
+  --output output/account-a.json
+```
+
+The importer keeps only in-scope GET/HEAD endpoints, removes common static assets, deduplicates paths, and ranks likely API and authorization-test candidates. It never writes request headers, cookies, request or response bodies, or query-string values to the inventory.
+
 Validate without sending traffic:
 
 ```bash
@@ -78,4 +91,3 @@ unset EXPOSEDAPI_TOKEN
 - Authentication values are never written to reports
 - Response bodies are not stored; reports contain length and SHA-256 only
 - Results are review candidates, not vulnerability claims
-
