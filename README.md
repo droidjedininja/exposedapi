@@ -1,14 +1,81 @@
 # ExposedAPI
 
-API misconfiguration scanner.
+ExposedAPI is a scope-enforced API security triage CLI for authorized testing. It inventories responses, records reproducible metadata, and identifies review candidates without claiming unverified vulnerabilities.
 
-## Install
-pip install .
+The interactive product demo lives in [`demo/`](demo/). It uses synthetic data and never contacts an external target.
 
-## Usage
-exposedapi --targets urls.txt --output report.json
+## Install on Kali Linux
 
-## Features
-- CORS misconfig detection
-- Auth bypass detection
-- IDOR detection
+```bash
+git clone https://github.com/droidjedininja/exposedapi.git
+cd exposedapi
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+exposedapi --help
+```
+
+## Prepare an authorized scan
+
+Create `scope.txt` with one approved hostname or wildcard per line:
+
+```text
+api.example.com
+*.api.example.com
+```
+
+Create `targets.txt` with exact HTTP(S) endpoints:
+
+```text
+https://api.example.com/health
+https://api.example.com/v1/profile
+```
+
+Validate without sending traffic:
+
+```bash
+exposedapi --targets targets.txt --scope scope.txt --dry-run --acknowledge-authorization
+```
+
+Run low-rate, read-only triage:
+
+```bash
+exposedapi \
+  --targets targets.txt \
+  --scope scope.txt \
+  --rate-limit 2 \
+  --researcher mrfixit347 \
+  --format json \
+  --output output/scan.json \
+  --acknowledge-authorization
+```
+
+Only use `--researcher` when the program permits or requires the `X-HackerOne-Research` header.
+
+For authenticated requests, keep the token out of command history:
+
+```bash
+read -rsp "Test-account token: " EXPOSEDAPI_TOKEN; export EXPOSEDAPI_TOKEN; echo
+exposedapi \
+  --targets targets.txt \
+  --scope scope.txt \
+  --auth-env EXPOSEDAPI_TOKEN \
+  --auth-scheme Bearer \
+  --rate-limit 1 \
+  --output output/authenticated.json \
+  --acknowledge-authorization
+unset EXPOSEDAPI_TOKEN
+```
+
+## Safety model
+
+- HTTP `GET` only
+- Exact scope validation before requests
+- Redirects are not followed
+- Explicit authorization acknowledgement required
+- Configurable rate limit and timeout
+- Authentication values are never written to reports
+- Response bodies are not stored; reports contain length and SHA-256 only
+- Results are review candidates, not vulnerability claims
+
