@@ -24,6 +24,7 @@ class CompareHarTests(unittest.TestCase):
             entry("GET", "https://console.circle.com/api/shared"),
             entry("POST", "https://console.circle.com/api/change"),
             entry("GET", "https://console.circle.com/api/auth/callback?code=secret"),
+            entry("GET", "https://console.circle.com/smart-contracts/contracts"),
             entry("GET", "https://example.com/api/shared"),
         ]
         self.assertEqual(len(_safe_targets(entries, ["console.circle.com"])), 1)
