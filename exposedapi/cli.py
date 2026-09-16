@@ -6,6 +6,7 @@ import os
 import sys
 
 from .har import import_har, write_inventory
+from .compare import compare_hars, write_comparison
 from .reporting import build_report, write_html, write_json
 from .scanner import load_lines, scan_targets, validate_target
 
@@ -47,8 +48,36 @@ def build_import_har_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_compare_har_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Safely compare two authorized HAR sessions")
+    parser.add_argument("compare-har", help=argparse.SUPPRESS)
+    parser.add_argument("--har-a", required=True)
+    parser.add_argument("--har-b", required=True)
+    parser.add_argument("--scope", required=True)
+    parser.add_argument("--rate-limit", type=float, default=0.5)
+    parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--output", "-o", required=True)
+    parser.add_argument("--acknowledge-authorization", action="store_true")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "compare-har":
+        parser = build_compare_har_parser()
+        args = parser.parse_args(argv)
+        if not args.acknowledge_authorization:
+            parser.error("--acknowledge-authorization is required")
+        if args.rate_limit <= 0 or args.rate_limit > 2:
+            parser.error("--rate-limit must be greater than 0 and no more than 2")
+        scope = load_lines(args.scope)
+        try:
+            report = compare_hars(args.har_a, args.har_b, scope, args.timeout, args.rate_limit)
+            write_comparison(report, args.output)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            parser.error(str(exc))
+        print(f"Saved {len(report['results'])} two-session comparison(s) to {args.output}")
+        return 0
     if argv and argv[0] == "import-har":
         parser = build_import_har_parser()
         args = parser.parse_args(argv)
