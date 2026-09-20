@@ -66,6 +66,8 @@ exposedapi \
 
 Only use `--researcher` when the program permits or requires the `X-HackerOne-Research` header.
 
+Authenticated requests require HTTPS. ExposedAPI rejects credential-bearing HTTP requests and target URLs containing sensitive query parameters such as `token`, `access_token`, `api_key`, or `password`.
+
 For authenticated requests, keep the token out of command history:
 
 ```bash
@@ -81,13 +83,29 @@ exposedapi \
 unset EXPOSEDAPI_TOKEN
 ```
 
+For API keys or other secret headers, keep the value in an environment variable instead of placing it in shell history:
+
+```bash
+read -rsp "Test API key: " EXPOSEDAPI_API_KEY; export EXPOSEDAPI_API_KEY; echo
+exposedapi \\
+  --targets targets.txt \\
+  --scope scope.txt \\
+  --header-env X-API-Key=EXPOSEDAPI_API_KEY \\
+  --output output/authenticated.json \\
+  --acknowledge-authorization
+unset EXPOSEDAPI_API_KEY
+```
+
+`--header` remains available for non-secret values. Use `--header-env` or `--auth-env` for credentials.
+
 ## Safety model
 
-- HTTP `GET` only
+- HTTP `GET` only; HTTPS is mandatory whenever credentials are attached
 - Exact scope validation before requests
 - Redirects are not followed
 - Explicit authorization acknowledgement required
 - Configurable rate limit and timeout
-- Authentication values are never written to reports
+- Authentication header and cookie values are never written to reports
+- Sensitive query parameters are rejected before any request
 - Response bodies are not stored; reports contain length and SHA-256 only
 - Results are review candidates, not vulnerability claims
