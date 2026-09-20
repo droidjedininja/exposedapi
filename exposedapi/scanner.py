@@ -6,11 +6,19 @@ from dataclasses import asdict, dataclass
 from fnmatch import fnmatch
 from typing import Iterable
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 RESEARCH_ORIGIN = "https://security-research.invalid"
+SENSITIVE_QUERY_NAMES = {
+    "access_token", "api_key", "apikey", "authorization", "code",
+    "id_token", "key", "password", "secret", "session", "state",
+    "statetoken", "token",
+}
+SENSITIVE_HEADER_NAMES = {
+    "authorization", "cookie", "proxy-authorization", "x-api-key", "api-key",
+}
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -61,11 +69,7 @@ class Observation:
 
 def load_lines(path: str) -> list[str]:
     with open(path, encoding="utf-8") as handle:
-        return [
-            line.strip()
-            for line in handle
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
+        return [line.strip() for line in handle if line.strip() and not line.lstrip().startswith("#")]
 
 
 def host_in_scope(hostname: str, scope_patterns: Iterable[str]) -> bool:
@@ -83,17 +87,32 @@ def host_in_scope(hostname: str, scope_patterns: Iterable[str]) -> bool:
     return False
 
 
-def validate_target(url: str, scope_patterns: Iterable[str]) -> str:
+def validate_target(
+    url: str,
+    scope_patterns: Iterable[str],
+    require_https: bool = False,
+    reject_sensitive_query: bool = False,
+) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("only http and https targets are supported")
+    if require_https and parsed.scheme != "https":
+        raise ValueError("HTTPS is required when credentials are sent")
     if not parsed.hostname:
         raise ValueError("target has no hostname")
     if parsed.username or parsed.password:
         raise ValueError("credentials must not be embedded in target URLs")
+    query_names = {name.lower() for name, _ in parse_qsl(parsed.query, keep_blank_values=True)}
+    sensitive = sorted(query_names & SENSITIVE_QUERY_NAMES)
+    if reject_sensitive_query and sensitive:
+        raise ValueError("sensitive query parameter is not allowed in a target URL: " + ", ".join(sensitive))
     if not host_in_scope(parsed.hostname, scope_patterns):
         raise ValueError(f"host is outside the supplied scope: {parsed.hostname}")
     return parsed.hostname.lower()
+
+
+def contains_credentials(headers: dict[str, str]) -> bool:
+    return any(name.lower() in SENSITIVE_HEADER_NAMES for name in headers)
 
 
 def _fingerprint(response: HttpResponse) -> tuple[int, str]:
@@ -101,36 +120,28 @@ def _fingerprint(response: HttpResponse) -> tuple[int, str]:
     return len(body), hashlib.sha256(body).hexdigest()
 
 
-def scan_endpoint(
-    url: str,
-    scope_patterns: Iterable[str],
-    headers: dict[str, str],
-    timeout: float,
-    session: object | None = None,
-) -> Observation:
-    validate_target(url, scope_patterns)
+def scan_endpoint(url: str, scope_patterns: Iterable[str], headers: dict[str, str], timeout: float, session: object | None = None) -> Observation:
+    validate_target(
+        url,
+        scope_patterns,
+        require_https=contains_credentials(headers),
+        reject_sensitive_query=True,
+    )
     client = session or UrllibClient()
     request_headers = {
         "Accept": "application/json, */*;q=0.8",
         "Origin": RESEARCH_ORIGIN,
-        "User-Agent": "ExposedAPI/0.2 authorized-security-research",
+        "User-Agent": "ExposedAPI/0.5 authorized-security-research",
         **headers,
     }
-
     try:
-        response = client.get(
-            url,
-            headers=request_headers,
-            timeout=timeout,
-            allow_redirects=False,
-        )
+        response = client.get(url, headers=request_headers, timeout=timeout, allow_redirects=False)
         body_length, body_hash = _fingerprint(response)
         allowed_origin = response.headers.get("Access-Control-Allow-Origin")
         credentials = response.headers.get("Access-Control-Allow-Credentials")
         notes: list[str] = []
         classification = "endpoint observation"
         confidence = "informational"
-
         if allowed_origin == RESEARCH_ORIGIN:
             classification = "CORS origin-reflection review candidate"
             confidence = "medium" if credentials and credentials.lower() == "true" else "low"
@@ -141,52 +152,20 @@ def scan_endpoint(
             classification = "wildcard CORS review candidate"
             confidence = "low"
             notes.append("Wildcard CORS alone does not demonstrate exposure of authenticated data.")
-
         if 300 <= response.status_code < 400:
             notes.append("Redirect was recorded but not followed, preventing an accidental out-of-scope request.")
-
-        return Observation(
-            endpoint=url,
-            status=response.status_code,
-            content_type=response.headers.get("Content-Type"),
-            content_length=body_length,
-            body_sha256=body_hash,
-            location=response.headers.get("Location"),
-            cors_origin=allowed_origin,
-            cors_credentials=credentials,
-            classification=classification,
-            confidence=confidence,
-            notes=notes,
-        )
+        return Observation(url, response.status_code, response.headers.get("Content-Type"), body_length, body_hash,
+                           response.headers.get("Location"), allowed_origin, credentials, classification, confidence, notes)
     except (URLError, TimeoutError, OSError) as exc:
-        return Observation(
-            endpoint=url,
-            status=None,
-            content_type=None,
-            content_length=None,
-            body_sha256=None,
-            location=None,
-            cors_origin=None,
-            cors_credentials=None,
-            classification="request error",
-            confidence="informational",
-            notes=[],
-            error=f"{exc.__class__.__name__}: {exc}",
-        )
+        return Observation(url, None, None, None, None, None, None, None, "request error", "informational", [],
+                           f"{exc.__class__.__name__}: {exc}")
 
 
-def scan_targets(
-    targets: Iterable[str],
-    scope_patterns: Iterable[str],
-    headers: dict[str, str],
-    timeout: float,
-    rate_limit: float,
-) -> list[Observation]:
-    target_list = list(targets)
-    scope_list = list(scope_patterns)
+def scan_targets(targets: Iterable[str], scope_patterns: Iterable[str], headers: dict[str, str], timeout: float, rate_limit: float) -> list[Observation]:
+    target_list, scope_list = list(targets), list(scope_patterns)
+    require_https = contains_credentials(headers)
     for target in target_list:
-        validate_target(target, scope_list)
-
+        validate_target(target, scope_list, require_https=require_https, reject_sensitive_query=True)
     delay = 1.0 / rate_limit
     results: list[Observation] = []
     session = UrllibClient()

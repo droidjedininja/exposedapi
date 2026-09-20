@@ -11,7 +11,7 @@ from .scanner import Observation
 def build_report(results: list[Observation], scope: list[str]) -> dict:
     return {
         "tool": "ExposedAPI",
-        "version": "0.2.0",
+        "version": "0.5.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "method": "authorized read-only GET triage",
         "scope": scope,
