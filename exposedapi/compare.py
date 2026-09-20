@@ -9,7 +9,7 @@ from urllib.error import URLError
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from .har import STATIC_SUFFIXES
-from .scanner import UrllibClient, validate_target
+from .scanner import SENSITIVE_QUERY_NAMES, UrllibClient, validate_target
 
 BLOCKED_PATH_TERMS = ("/callback", "/logout", "/signout", "/token/redirect", "/smart-contracts")
 SENSITIVE_QUERY_NAMES = {"access_token", "code", "id_token", "state", "statetoken", "token"}
@@ -44,7 +44,7 @@ def _safe_targets(entries: list[dict], scope: list[str]) -> list[tuple[str, str,
         if method != "GET" or not isinstance(url, str):
             continue
         try:
-            validate_target(url, scope)
+            validate_target(url, scope, require_https=True)
         except ValueError:
             continue
         parsed = urlsplit(url)
@@ -62,7 +62,7 @@ def _safe_targets(entries: list[dict], scope: list[str]) -> list[tuple[str, str,
 
 def _observe(client: UrllibClient, method: str, url: str, cookie: str, timeout: float) -> dict:
     try:
-        response = client.get(url, headers={"Accept": "application/json, */*;q=0.8", "Cookie": cookie, "User-Agent": "ExposedAPI/0.4 authorized-security-research"}, timeout=timeout, allow_redirects=False)
+        response = client.get(url, headers={"Accept": "application/json, */*;q=0.8", "Cookie": cookie, "User-Agent": "ExposedAPI/0.5 authorized-security-research"}, timeout=timeout, allow_redirects=False)
         body = response.content or b""
         return {"status": response.status_code, "length": len(body), "sha256": hashlib.sha256(body).hexdigest(), "error": None}
     except (URLError, TimeoutError, OSError) as exc:
@@ -88,7 +88,7 @@ def compare_hars(har_a: str, har_b: str, scope: list[str], timeout: float, rate_
         same = bool(a["sha256"] and a["sha256"] == b["sha256"] and a["status"] == b["status"])
         classification = "same-response review candidate" if same and a["status"] == 200 else "different or access-controlled"
         results.append({"method": method, "endpoint": display_url, "account_a": a, "account_b": b, "classification": classification})
-    return {"tool": "ExposedAPI", "version": "0.4.0", "generated_at": datetime.now(timezone.utc).isoformat(), "methodology": "authorized two-session GET comparison; redirects disabled", "scope": scope, "results": results}
+    return {"tool": "ExposedAPI", "version": "0.5.0", "generated_at": datetime.now(timezone.utc).isoformat(), "methodology": "authorized two-session GET comparison; redirects disabled", "scope": scope, "results": results}
 
 
 def write_comparison(report: dict, output: str) -> None:
