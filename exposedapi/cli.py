@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     if not targets: parser.error("target file is empty")
     if not scope: parser.error("scope file is empty")
     try:
-        for target in targets: validate_target(target, scope)
+        for target in targets: validate_target(target, scope, reject_sensitive_query=True)
     except ValueError as exc: parser.error(str(exc))
     if args.dry_run:
         print(f"Authorized scope validation passed for {len(targets)} target(s). No requests were sent."); return 0
