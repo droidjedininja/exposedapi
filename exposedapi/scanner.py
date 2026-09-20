@@ -87,7 +87,12 @@ def host_in_scope(hostname: str, scope_patterns: Iterable[str]) -> bool:
     return False
 
 
-def validate_target(url: str, scope_patterns: Iterable[str], require_https: bool = False) -> str:
+def validate_target(
+    url: str,
+    scope_patterns: Iterable[str],
+    require_https: bool = False,
+    reject_sensitive_query: bool = False,
+) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("only http and https targets are supported")
@@ -99,7 +104,7 @@ def validate_target(url: str, scope_patterns: Iterable[str], require_https: bool
         raise ValueError("credentials must not be embedded in target URLs")
     query_names = {name.lower() for name, _ in parse_qsl(parsed.query, keep_blank_values=True)}
     sensitive = sorted(query_names & SENSITIVE_QUERY_NAMES)
-    if sensitive:
+    if reject_sensitive_query and sensitive:
         raise ValueError("sensitive query parameter is not allowed in a target URL: " + ", ".join(sensitive))
     if not host_in_scope(parsed.hostname, scope_patterns):
         raise ValueError(f"host is outside the supplied scope: {parsed.hostname}")
@@ -116,7 +121,12 @@ def _fingerprint(response: HttpResponse) -> tuple[int, str]:
 
 
 def scan_endpoint(url: str, scope_patterns: Iterable[str], headers: dict[str, str], timeout: float, session: object | None = None) -> Observation:
-    validate_target(url, scope_patterns, require_https=contains_credentials(headers))
+    validate_target(
+        url,
+        scope_patterns,
+        require_https=contains_credentials(headers),
+        reject_sensitive_query=True,
+    )
     client = session or UrllibClient()
     request_headers = {
         "Accept": "application/json, */*;q=0.8",
@@ -155,7 +165,7 @@ def scan_targets(targets: Iterable[str], scope_patterns: Iterable[str], headers:
     target_list, scope_list = list(targets), list(scope_patterns)
     require_https = contains_credentials(headers)
     for target in target_list:
-        validate_target(target, scope_list, require_https=require_https)
+        validate_target(target, scope_list, require_https=require_https, reject_sensitive_query=True)
     delay = 1.0 / rate_limit
     results: list[Observation] = []
     session = UrllibClient()
