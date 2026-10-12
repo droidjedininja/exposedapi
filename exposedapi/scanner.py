@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from fnmatch import fnmatch
+from threading import Lock, local
 from typing import Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlparse
@@ -31,6 +34,37 @@ class HttpResponse:
     status_code: int
     content: bytes
     headers: object
+
+
+@dataclass(frozen=True)
+class ScanConfig:
+    timeout: float = 10.0
+    rate_limit: float = 1.0
+    workers: int = 1
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.timeout) or self.timeout <= 0 or self.timeout > 60:
+            raise ValueError("timeout must be greater than 0 and no more than 60")
+        if not math.isfinite(self.rate_limit) or self.rate_limit <= 0 or self.rate_limit > 10:
+            raise ValueError("rate limit must be greater than 0 and no more than 10")
+        if self.workers < 1 or self.workers > 8:
+            raise ValueError("workers must be between 1 and 8")
+
+
+class _RateLimiter:
+    def __init__(self, requests_per_second: float) -> None:
+        self.interval = 1.0 / requests_per_second
+        self.next_request = 0.0
+        self.lock = Lock()
+
+    def wait(self) -> None:
+        with self.lock:
+            now = time.monotonic()
+            scheduled = max(now, self.next_request)
+            self.next_request = scheduled + self.interval
+        delay = scheduled - now
+        if delay > 0:
+            time.sleep(delay)
 
 
 class UrllibClient:
@@ -161,16 +195,29 @@ def scan_endpoint(url: str, scope_patterns: Iterable[str], headers: dict[str, st
                            f"{exc.__class__.__name__}: {exc}")
 
 
-def scan_targets(targets: Iterable[str], scope_patterns: Iterable[str], headers: dict[str, str], timeout: float, rate_limit: float) -> list[Observation]:
+def scan_targets(
+    targets: Iterable[str],
+    scope_patterns: Iterable[str],
+    headers: dict[str, str],
+    timeout: float,
+    rate_limit: float,
+    workers: int = 1,
+) -> list[Observation]:
     target_list, scope_list = list(targets), list(scope_patterns)
+    config = ScanConfig(timeout=timeout, rate_limit=rate_limit, workers=workers)
     require_https = contains_credentials(headers)
     for target in target_list:
         validate_target(target, scope_list, require_https=require_https, reject_sensitive_query=True)
-    delay = 1.0 / rate_limit
-    results: list[Observation] = []
-    session = UrllibClient()
-    for index, target in enumerate(target_list):
-        if index:
-            time.sleep(delay)
-        results.append(scan_endpoint(target, scope_list, headers, timeout, session))
-    return results
+    limiter = _RateLimiter(config.rate_limit)
+    clients = local()
+
+    def scan(target: str) -> Observation:
+        limiter.wait()
+        if not hasattr(clients, "client"):
+            clients.client = UrllibClient()
+        return scan_endpoint(target, scope_list, headers, config.timeout, clients.client)
+
+    if config.workers == 1:
+        return [scan(target) for target in target_list]
+    with ThreadPoolExecutor(max_workers=config.workers) as executor:
+        return list(executor.map(scan, target_list))
