@@ -8,7 +8,7 @@ import sys
 from .har import import_har, write_inventory
 from .compare import compare_hars, write_comparison
 from .reporting import build_report, write_html, write_json
-from .scanner import load_lines, scan_targets, validate_target
+from .scanner import ScanConfig, load_lines, scan_targets, validate_target
 
 
 def parse_header(value: str) -> tuple[str, str]:
@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auth-scheme", default="Bearer", help="Authorization scheme used with --auth-env")
     parser.add_argument("--rate-limit", type=float, default=1.0, help="Maximum requests per second (default: 1)")
     parser.add_argument("--timeout", type=float, default=10.0, help="Per-request timeout in seconds")
+    parser.add_argument("--workers", type=int, default=1, help="Concurrent workers (1-8; the rate limit applies globally)")
     parser.add_argument("--format", choices=["json", "html"], default="json")
     parser.add_argument("--output", "-o", default="output/scan.json")
     parser.add_argument("--dry-run", action="store_true", help="Validate targets and scope without network traffic")
@@ -90,7 +91,12 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "compare-har":
         parser = build_compare_har_parser(); args = parser.parse_args(argv)
         if not args.acknowledge_authorization: parser.error("--acknowledge-authorization is required")
-        if args.rate_limit <= 0 or args.rate_limit > 2: parser.error("--rate-limit must be greater than 0 and no more than 2")
+        try:
+            ScanConfig(timeout=args.timeout, rate_limit=args.rate_limit)
+            if args.rate_limit > 2:
+                raise ValueError("compare-har --rate-limit must be no more than 2")
+        except ValueError as exc:
+            parser.error(str(exc))
         scope = load_lines(args.scope)
         try:
             report = compare_hars(args.har_a, args.har_b, scope, args.timeout, args.rate_limit)
@@ -106,8 +112,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Saved {inventory['summary']['unique_safe_endpoints']} redacted, in-scope GET/HEAD endpoint(s) to {args.output}"); return 0
     parser = build_parser(); args = parser.parse_args(argv)
     if not args.acknowledge_authorization: parser.error("--acknowledge-authorization is required")
-    if args.rate_limit <= 0 or args.rate_limit > 10: parser.error("--rate-limit must be greater than 0 and no more than 10")
-    if args.timeout <= 0 or args.timeout > 60: parser.error("--timeout must be greater than 0 and no more than 60")
+    try:
+        config = ScanConfig(timeout=args.timeout, rate_limit=args.rate_limit, workers=args.workers)
+    except ValueError as exc:
+        parser.error(str(exc))
     targets, scope = load_lines(args.targets), load_lines(args.scope)
     if not targets: parser.error("target file is empty")
     if not scope: parser.error("scope file is empty")
@@ -125,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         if "\r" in token or "\n" in token: parser.error(f"environment variable contains an invalid newline: {args.auth_env}")
         headers["Authorization"] = f"{args.auth_scheme} {token}".strip()
     try:
-        results = scan_targets(targets, scope, headers, args.timeout, args.rate_limit)
+        results = scan_targets(targets, scope, headers, config.timeout, config.rate_limit, config.workers)
     except ValueError as exc: parser.error(str(exc))
     report = build_report(results, scope)
     if args.format == "html":

@@ -58,11 +58,14 @@ exposedapi \
   --targets targets.txt \
   --scope scope.txt \
   --rate-limit 2 \
+  --workers 4 \
   --researcher mrfixit347 \
   --format json \
   --output output/scan.json \
   --acknowledge-authorization
 ```
+
+`--workers` is bounded to 1–8, and `--rate-limit` is enforced globally across workers. Scans remain read-only GET requests; redirects are never followed.
 
 Only use `--researcher` when the program permits or requires the `X-HackerOne-Research` header.
 
@@ -97,6 +100,22 @@ unset EXPOSEDAPI_API_KEY
 ```
 
 `--header` remains available for non-secret values. Use `--header-env` or `--auth-env` for credentials.
+
+## Compare two authorized sessions
+
+Export separate HAR files for two test accounts, using the same approved scope. Comparison replays only matching, in-scope HTTPS GET endpoints that carry a consistent cookie for that endpoint; it skips unsafe paths and any URL containing a known sensitive query parameter:
+
+```bash
+exposedapi compare-har \
+  --har-a ~/captures/account-a.har \
+  --har-b ~/captures/account-b.har \
+  --scope scope.txt \
+  --rate-limit 0.5 \
+  --output output/account-comparison.json \
+  --acknowledge-authorization
+```
+
+The comparison report contains status codes and response fingerprints, not cookies or bodies. Matching responses are review candidates only; identical responses do not by themselves establish an authorization vulnerability. Review differing or inconclusive results manually before drawing conclusions.
 
 ## Safety model
 

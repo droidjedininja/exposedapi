@@ -2,10 +2,10 @@ import hashlib
 import os
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from exposedapi.cli import main, parse_header
-from exposedapi.scanner import RESEARCH_ORIGIN, host_in_scope, scan_endpoint, validate_target
+from exposedapi.scanner import RESEARCH_ORIGIN, _RateLimiter, host_in_scope, scan_endpoint, scan_targets, validate_target
 
 
 class ScopeTests(unittest.TestCase):
@@ -40,6 +40,28 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(result.body_sha256, hashlib.sha256(response.content).hexdigest())
         self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
 
+    def test_rate_limiter_enforces_a_shared_start_interval(self):
+        limiter = _RateLimiter(2)
+        with patch("exposedapi.scanner.time.monotonic", side_effect=[0.0, 0.1, 0.5]), \
+             patch("exposedapi.scanner.time.sleep") as sleep:
+            limiter.wait()
+            limiter.wait()
+            limiter.wait()
+        self.assertEqual(sleep.call_count, 2)
+        self.assertAlmostEqual(sleep.call_args_list[0].args[0], 0.4)
+        self.assertAlmostEqual(sleep.call_args_list[1].args[0], 0.5)
+
+    def test_parallel_scan_preserves_input_order(self):
+        targets = [
+            "https://api.example.com/first",
+            "https://api.example.com/second",
+            "https://api.example.com/third",
+        ]
+        with patch("exposedapi.scanner.scan_endpoint", side_effect=lambda url, *_args: url), \
+             patch("exposedapi.scanner.time.sleep"):
+            results = scan_targets(targets, ["api.example.com"], {}, 5, 10, workers=3)
+        self.assertEqual(results, targets)
+
     def test_dry_run_sends_no_requests(self):
         with tempfile.TemporaryDirectory() as directory:
             targets = os.path.join(directory, "targets.txt")
@@ -58,4 +80,3 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

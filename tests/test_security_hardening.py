@@ -5,10 +5,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 from exposedapi.cli import main, parse_header_env
-from exposedapi.scanner import contains_credentials, validate_target
+from exposedapi.scanner import ScanConfig, contains_credentials, validate_target
 
 
 class SecurityHardeningTests(unittest.TestCase):
+    def test_scan_config_enforces_safe_bounds(self):
+        self.assertEqual(ScanConfig(timeout=5, rate_limit=2, workers=4).workers, 4)
+        for options in (
+            {"timeout": float("nan")},
+            {"rate_limit": float("inf")},
+            {"workers": 0},
+            {"workers": 9},
+        ):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                ScanConfig(**options)
+
     def test_sensitive_query_values_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "sensitive query parameter"):
             validate_target(
