@@ -5,6 +5,7 @@ import json
 import os
 import sys
 
+from .matrix import prepare_matrix, run_matrix
 from .har import import_har, write_inventory
 from .compare import compare_hars, write_comparison
 from .reporting import build_report, write_html, write_json
@@ -88,6 +89,36 @@ def _environment_headers(items: list[tuple[str, str]], parser: argparse.Argument
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "account-matrix":
+        parser = argparse.ArgumentParser(description="Check explicit expected access across authorized accounts")
+        parser.add_argument("account-matrix", help=argparse.SUPPRESS)
+        parser.add_argument("--matrix", required=True, help="JSON resources and credential environment references")
+        parser.add_argument("--scope", required=True)
+        parser.add_argument("--output", "-o", default="output/matrix.json")
+        parser.add_argument("--timeout", type=float, default=10.0)
+        parser.add_argument("--rate-limit", type=float, default=0.5)
+        parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--acknowledge-authorization", action="store_true")
+        args = parser.parse_args(argv)
+        if not args.acknowledge_authorization:
+            parser.error("--acknowledge-authorization is required")
+        try:
+            ScanConfig(timeout=args.timeout, rate_limit=args.rate_limit)
+            if args.rate_limit > 2:
+                raise ValueError("account-matrix rate limit must be no more than 2")
+            scope = load_lines(args.scope)
+            with open(args.matrix, encoding="utf-8") as handle:
+                document = json.load(handle)
+            sessions, resources = prepare_matrix(document, scope)
+            if args.dry_run:
+                print(f"Validated {len(resources)} resource(s) across {len(sessions)} sessions. No requests were sent.")
+                return 0
+            report = run_matrix(document, scope, args.timeout, args.rate_limit)
+            write_json(report, args.output)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(f"Saved {len(report['results'])} account matrix check(s) to {args.output}")
+        return 0
     if argv and argv[0] == "compare-har":
         parser = build_compare_har_parser(); args = parser.parse_args(argv)
         if not args.acknowledge_authorization: parser.error("--acknowledge-authorization is required")
