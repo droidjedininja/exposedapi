@@ -1,6 +1,6 @@
 # ExposedAPI
 
-ExposedAPI is a API security triage with optional hostname filtering CLI for authorized testing. It inventories responses, records reproducible metadata, and identifies review candidates without claiming unverified vulnerabilities.
+ExposedAPI is an API security triage CLI for authorized testing, with optional hostname filtering. It inventories responses, records reproducible metadata, and identifies review candidates without claiming unverified vulnerabilities.
 
 The interactive product demo lives in [`demo/`](demo/). It uses synthetic data and never contacts an external target.
 
