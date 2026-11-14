@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from .scanner import Observation
 
 
-def build_report(results: list[Observation], scope: list[str]) -> dict:
+def build_report(results: list[Observation], scope: list[str] | None) -> dict:
     return {
         "tool": "ExposedAPI",
         "version": "0.5.0",

@@ -123,7 +123,7 @@ def host_in_scope(hostname: str, scope_patterns: Iterable[str]) -> bool:
 
 def validate_target(
     url: str,
-    scope_patterns: Iterable[str],
+    scope_patterns: Iterable[str] | None,
     require_https: bool = False,
     reject_sensitive_query: bool = False,
 ) -> str:
@@ -140,7 +140,7 @@ def validate_target(
     sensitive = sorted(query_names & SENSITIVE_QUERY_NAMES)
     if reject_sensitive_query and sensitive:
         raise ValueError("sensitive query parameter is not allowed in a target URL: " + ", ".join(sensitive))
-    if not host_in_scope(parsed.hostname, scope_patterns):
+    if scope_patterns is not None and not host_in_scope(parsed.hostname, scope_patterns):
         raise ValueError(f"host is outside the supplied scope: {parsed.hostname}")
     return parsed.hostname.lower()
 
@@ -154,7 +154,7 @@ def _fingerprint(response: HttpResponse) -> tuple[int, str]:
     return len(body), hashlib.sha256(body).hexdigest()
 
 
-def scan_endpoint(url: str, scope_patterns: Iterable[str], headers: dict[str, str], timeout: float, session: object | None = None) -> Observation:
+def scan_endpoint(url: str, scope_patterns: Iterable[str] | None, headers: dict[str, str], timeout: float, session: object | None = None) -> Observation:
     validate_target(
         url,
         scope_patterns,
@@ -197,13 +197,14 @@ def scan_endpoint(url: str, scope_patterns: Iterable[str], headers: dict[str, st
 
 def scan_targets(
     targets: Iterable[str],
-    scope_patterns: Iterable[str],
+    scope_patterns: Iterable[str] | None,
     headers: dict[str, str],
     timeout: float,
     rate_limit: float,
     workers: int = 1,
 ) -> list[Observation]:
-    target_list, scope_list = list(targets), list(scope_patterns)
+    target_list = list(targets)
+    scope_list = None if scope_patterns is None else list(scope_patterns)
     config = ScanConfig(timeout=timeout, rate_limit=rate_limit, workers=workers)
     require_https = contains_credentials(headers)
     for target in target_list:

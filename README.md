@@ -1,6 +1,6 @@
 # ExposedAPI
 
-ExposedAPI is a scope-enforced API security triage CLI for authorized testing. It inventories responses, records reproducible metadata, and identifies review candidates without claiming unverified vulnerabilities.
+ExposedAPI is a API security triage with optional hostname filtering CLI for authorized testing. It inventories responses, records reproducible metadata, and identifies review candidates without claiming unverified vulnerabilities.
 
 The interactive product demo lives in [`demo/`](demo/). It uses synthetic data and never contacts an external target.
 
@@ -18,7 +18,14 @@ exposedapi --help
 
 ## Prepare an authorized scan
 
-Create `scope.txt` with one approved hostname or wildcard per line:
+The `--scope` option is optional for every command: scans, `import-har`,
+`compare-har`, and `account-matrix`. Omit it to accept supplied target URLs
+(or eligible HAR URLs) without hostname filtering. Reports use `"scope": null`
+when filtering is disabled. Authorization acknowledgement, credential protection,
+rate limits, and redirect restrictions still apply.
+
+To restrict hosts, create `scope.txt` with one approved hostname or wildcard per line.
+A supplied empty or unreadable scope file is an error:
 
 ```text
 api.example.com
@@ -43,7 +50,7 @@ exposedapi import-har \
   --output output/account-a.json
 ```
 
-The importer keeps only in-scope GET/HEAD endpoints, removes common static assets, deduplicates paths, and ranks likely API and authorization-test candidates. It never writes request headers, cookies, request or response bodies, or query-string values to the inventory.
+The importer keeps only eligible GET/HEAD endpoints (filtered by scope when supplied), removes common static assets, deduplicates paths, and ranks likely API and authorization-test candidates. It never writes request headers, cookies, request or response bodies, or query-string values to the inventory.
 
 Validate without sending traffic:
 
@@ -103,7 +110,7 @@ unset EXPOSEDAPI_API_KEY
 
 ## Compare two authorized sessions
 
-Export separate HAR files for two test accounts, using the same approved scope. Comparison replays only matching, in-scope HTTPS GET endpoints that carry a consistent cookie for that endpoint; it skips unsafe paths and any URL containing a known sensitive query parameter:
+Export separate HAR files for two test accounts, optionally using the same approved scope. Comparison replays only matching HTTPS GET endpoints (filtered by scope when supplied) that carry a consistent cookie for that endpoint; it skips unsafe paths and any URL containing a known sensitive query parameter:
 
 ```bash
 exposedapi compare-har \
@@ -165,6 +172,7 @@ Every resource is requested once with each account and once without credentials.
 The reserved account `anonymous` may appear in `allowed_accounts` for public resources.
 Every omitted account is expected to be denied. Resources need not appear in
 multiple HAR files. All URLs and credentials are validated before traffic starts;
+hostname filtering applies only when `--scope` is supplied;
 HTTPS is required, redirects are disabled, and the global rate limit is capped at
 2 requests per second. Use only known read endpoints: GET endpoints can still
 have side effects. Common unsafe replay paths are rejected.
@@ -185,7 +193,7 @@ environment variables, but send no requests.
 ## Safety model
 
 - HTTP `GET` only; HTTPS is mandatory whenever credentials are attached
-- Exact scope validation before requests
+- Hostname allowlist validation before requests when `--scope` is supplied
 - Redirects are not followed
 - Explicit authorization acknowledgement required
 - Configurable rate limit and timeout

@@ -9,9 +9,9 @@ from .compare import BLOCKED_PATH_TERMS
 from .scanner import ScanConfig, UrllibClient, _RateLimiter, scan_endpoint, validate_target
 
 
-def prepare_matrix(document: dict, scope: list[str]) -> tuple[dict[str, dict[str, str]], list[dict]]:
-    if not isinstance(document, dict) or not scope:
-        raise ValueError("matrix must be an object and scope must not be empty")
+def prepare_matrix(document: dict, scope: list[str] | None) -> tuple[dict[str, dict[str, str]], list[dict]]:
+    if not isinstance(document, dict):
+        raise ValueError("matrix must be an object")
     accounts = document.get("accounts")
     resources = document.get("resources")
     if not isinstance(accounts, dict) or not accounts or "anonymous" in accounts:
@@ -59,7 +59,7 @@ def prepare_matrix(document: dict, scope: list[str]) -> tuple[dict[str, dict[str
     return sessions, checked
 
 
-def run_matrix(document: dict, scope: list[str], timeout: float = 10, rate_limit: float = 0.5) -> dict:
+def run_matrix(document: dict, scope: list[str] | None, timeout: float = 10, rate_limit: float = 0.5) -> dict:
     config = ScanConfig(timeout=timeout, rate_limit=rate_limit)
     if rate_limit > 2:
         raise ValueError("account-matrix rate limit must be no more than 2")

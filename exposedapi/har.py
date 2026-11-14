@@ -36,7 +36,7 @@ def _candidate_score(method: str, path: str, query_names: list[str]) -> tuple[in
     return score, reasons
 
 
-def import_har(har_path: str, scope_patterns: list[str]) -> dict:
+def import_har(har_path: str, scope_patterns: list[str] | None) -> dict:
     with open(har_path, encoding="utf-8") as handle:
         document = json.load(handle)
     entries = document.get("log", {}).get("entries", [])
