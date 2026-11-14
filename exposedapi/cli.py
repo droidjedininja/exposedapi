@@ -5,6 +5,7 @@ import json
 import os
 import sys
 
+from .matrix import prepare_matrix, run_matrix
 from .har import import_har, write_inventory
 from .compare import compare_hars, write_comparison
 from .reporting import build_report, write_html, write_json
@@ -34,9 +35,9 @@ def parse_header_env(value: str) -> tuple[str, str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Scope-enforced API security triage for authorized testing")
+    parser = argparse.ArgumentParser(description="API security triage for authorized testing")
     parser.add_argument("--targets", required=True, help="File containing exact HTTP(S) endpoint URLs")
-    parser.add_argument("--scope", required=True, help="File containing authorized hostnames or wildcards")
+    parser.add_argument("--scope", help="Optional hostname/wildcard allowlist; omitted means no hostname filtering")
     parser.add_argument("--header", action="append", default=[], type=parse_header, help="Non-secret additional header; repeatable")
     parser.add_argument("--header-env", action="append", default=[], type=parse_header_env, help="Secret header as Header-Name=ENV_VAR; repeatable")
     parser.add_argument("--researcher", help="Value for X-HackerOne-Research when the program permits it")
@@ -56,7 +57,7 @@ def build_import_har_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Import and safely inventory an authorized browser HAR")
     parser.add_argument("import-har", help=argparse.SUPPRESS)
     parser.add_argument("--har", required=True)
-    parser.add_argument("--scope", required=True)
+    parser.add_argument("--scope", help="Optional hostname/wildcard allowlist; omitted means no hostname filtering")
     parser.add_argument("--output", "-o", required=True)
     return parser
 
@@ -66,7 +67,7 @@ def build_compare_har_parser() -> argparse.ArgumentParser:
     parser.add_argument("compare-har", help=argparse.SUPPRESS)
     parser.add_argument("--har-a", required=True)
     parser.add_argument("--har-b", required=True)
-    parser.add_argument("--scope", required=True)
+    parser.add_argument("--scope", help="Optional hostname/wildcard allowlist; omitted means no hostname filtering")
     parser.add_argument("--rate-limit", type=float, default=0.5)
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--output", "-o", required=True)
@@ -86,8 +87,50 @@ def _environment_headers(items: list[tuple[str, str]], parser: argparse.Argument
     return headers
 
 
+def _load_scope(path: str | None, parser: argparse.ArgumentParser) -> list[str] | None:
+    if path is None:
+        return None
+    try:
+        scope = load_lines(path)
+    except OSError as exc:
+        parser.error(str(exc))
+    if not scope:
+        parser.error("scope file is empty")
+    return scope
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "account-matrix":
+        parser = argparse.ArgumentParser(description="Check explicit expected access across authorized accounts")
+        parser.add_argument("account-matrix", help=argparse.SUPPRESS)
+        parser.add_argument("--matrix", required=True, help="JSON resources and credential environment references")
+        parser.add_argument("--scope", help="Optional hostname/wildcard allowlist; omitted means no hostname filtering")
+        parser.add_argument("--output", "-o", default="output/matrix.json")
+        parser.add_argument("--timeout", type=float, default=10.0)
+        parser.add_argument("--rate-limit", type=float, default=0.5)
+        parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--acknowledge-authorization", action="store_true")
+        args = parser.parse_args(argv)
+        if not args.acknowledge_authorization:
+            parser.error("--acknowledge-authorization is required")
+        try:
+            ScanConfig(timeout=args.timeout, rate_limit=args.rate_limit)
+            if args.rate_limit > 2:
+                raise ValueError("account-matrix rate limit must be no more than 2")
+            scope = _load_scope(args.scope, parser)
+            with open(args.matrix, encoding="utf-8") as handle:
+                document = json.load(handle)
+            sessions, resources = prepare_matrix(document, scope)
+            if args.dry_run:
+                print(f"Validated {len(resources)} resource(s) across {len(sessions)} sessions. No requests were sent.")
+                return 0
+            report = run_matrix(document, scope, args.timeout, args.rate_limit)
+            write_json(report, args.output)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(f"Saved {len(report['results'])} account matrix check(s) to {args.output}")
+        return 0
     if argv and argv[0] == "compare-har":
         parser = build_compare_har_parser(); args = parser.parse_args(argv)
         if not args.acknowledge_authorization: parser.error("--acknowledge-authorization is required")
@@ -97,33 +140,31 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("compare-har --rate-limit must be no more than 2")
         except ValueError as exc:
             parser.error(str(exc))
-        scope = load_lines(args.scope)
+        scope = _load_scope(args.scope, parser)
         try:
             report = compare_hars(args.har_a, args.har_b, scope, args.timeout, args.rate_limit)
             write_comparison(report, args.output)
         except (OSError, json.JSONDecodeError, ValueError) as exc: parser.error(str(exc))
         print(f"Saved {len(report['results'])} two-session comparison(s) to {args.output}"); return 0
     if argv and argv[0] == "import-har":
-        parser = build_import_har_parser(); args = parser.parse_args(argv); scope = load_lines(args.scope)
-        if not scope: parser.error("scope file is empty")
+        parser = build_import_har_parser(); args = parser.parse_args(argv); scope = _load_scope(args.scope, parser)
         try:
             inventory = import_har(args.har, scope); write_inventory(inventory, args.output)
         except (OSError, json.JSONDecodeError, ValueError) as exc: parser.error(str(exc))
-        print(f"Saved {inventory['summary']['unique_safe_endpoints']} redacted, in-scope GET/HEAD endpoint(s) to {args.output}"); return 0
+        print(f"Saved {inventory['summary']['unique_safe_endpoints']} redacted GET/HEAD endpoint(s) to {args.output}"); return 0
     parser = build_parser(); args = parser.parse_args(argv)
     if not args.acknowledge_authorization: parser.error("--acknowledge-authorization is required")
     try:
         config = ScanConfig(timeout=args.timeout, rate_limit=args.rate_limit, workers=args.workers)
     except ValueError as exc:
         parser.error(str(exc))
-    targets, scope = load_lines(args.targets), load_lines(args.scope)
+    targets, scope = load_lines(args.targets), _load_scope(args.scope, parser)
     if not targets: parser.error("target file is empty")
-    if not scope: parser.error("scope file is empty")
     try:
         for target in targets: validate_target(target, scope, reject_sensitive_query=True)
     except ValueError as exc: parser.error(str(exc))
     if args.dry_run:
-        print(f"Authorized scope validation passed for {len(targets)} target(s). No requests were sent."); return 0
+        print(f"Target validation passed for {len(targets)} target(s). No requests were sent."); return 0
     headers = dict(args.header)
     headers.update(_environment_headers(args.header_env, parser))
     if args.researcher: headers["X-HackerOne-Research"] = args.researcher

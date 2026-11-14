@@ -42,7 +42,7 @@ def _cookie_for_request(request: dict) -> str | None:
     return "; ".join(values) if values else None
 
 
-def _safe_targets(entries: list[dict], scope: list[str]) -> list[tuple[str, str, str, str]]:
+def _safe_targets(entries: list[dict], scope: list[str] | None) -> list[tuple[str, str, str, str]]:
     targets: dict[tuple[str, str], tuple[str, str, str, str]] = {}
     ambiguous: set[tuple[str, str]] = set()
     for entry in entries:
@@ -85,7 +85,7 @@ def _observe(client: UrllibClient, method: str, url: str, cookie: str, timeout: 
         return {"status": None, "length": None, "sha256": None, "error": exc.__class__.__name__}
 
 
-def compare_hars(har_a: str, har_b: str, scope: list[str], timeout: float, rate_limit: float) -> dict:
+def compare_hars(har_a: str, har_b: str, scope: list[str] | None, timeout: float, rate_limit: float) -> dict:
     ScanConfig(timeout=timeout, rate_limit=rate_limit)
     if rate_limit > 2:
         raise ValueError("compare-har rate limit must be no more than 2")
