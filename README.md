@@ -201,3 +201,5 @@ environment variables, but send no requests.
 - Sensitive query parameters are rejected before any request
 - Response bodies are not stored; reports contain length and SHA-256 only
 - Results are review candidates, not vulnerability claims
+
+Copyright © 2026 Freddie. All rights reserved.
